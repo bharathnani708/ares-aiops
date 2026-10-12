@@ -138,7 +138,7 @@ gh repo create ares-aiops --public --source . --push
 
 Keep the name `ares-aiops` unless you also change `project` in Terraform and the names in `gitops/`.
 
-### Step 2: configure the AWS CLI
+### Step 2: configure the AWS CLI 
 
 Pick one:
 
