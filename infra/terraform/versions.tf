@@ -20,7 +20,10 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
-data "aws_availability_zones" "available" { state = "available" }
+data "aws_availability_zones" "available" {
+  #checkov:skip=CKV_AWS_394:Only the first var.az_count zones are used (slice in locals), so new zones cannot change the subnets
+  state = "available"
+}
 
 locals {
   name       = var.project

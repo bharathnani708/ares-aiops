@@ -29,8 +29,24 @@ variable "project" {
 }
 
 variable "github_repository" {
-  description = "owner/name of your GitHub repository, e.g. octocat/ares-aiops"
+  description = "owner/name of your GitHub repository, e.g. octocat/ares-aiops (not the URL)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", var.github_repository))
+    error_message = "Use owner/name, e.g. octocat/ares-aiops - not https://github.com/..."
+  }
+}
+
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    Prefix of the OIDC "sub" claim GitHub sends. Leave empty for the classic
+    "repo:owner/name" form. Repos using immutable subjects send
+    "repo:owner@<id>/name@<id>"; get yours with:
+      gh api repos/OWNER/NAME/actions/oidc/customization/sub --jq .sub_claim_prefix
+  EOT
+  type        = string
+  default     = ""
 }
 
 variable "github_environment" {
@@ -45,7 +61,7 @@ locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project}-tfstate-${local.account_id}-${var.region}"
   oidc_host    = "token.actions.githubusercontent.com"
-  repo_sub     = "repo:${var.github_repository}"
+  repo_sub     = var.github_oidc_subject_prefix != "" ? var.github_oidc_subject_prefix : "repo:${var.github_repository}"
 }
 
 # ----------------------------------------------------------------- state bucket

@@ -1,10 +1,26 @@
 # Customer-managed keys: one for Kubernetes secrets envelope encryption, one
 # for CloudWatch Logs and ECR. Both rotate yearly.
 
+data "aws_iam_policy_document" "eks_kms" {
+  #checkov:skip=CKV_AWS_109:Key policy - Resource "*" means this key only; scoped to this account root
+  #checkov:skip=CKV_AWS_111:Key policy - Resource "*" means this key only
+  #checkov:skip=CKV_AWS_356:Key policy - Resource "*" means this key only
+  statement {
+    sid       = "AccountAdmin"
+    actions   = ["kms:*"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:root"]
+    }
+  }
+}
+
 resource "aws_kms_key" "eks" {
   description             = "${local.name} EKS secrets encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
+  policy                  = data.aws_iam_policy_document.eks_kms.json
 }
 
 resource "aws_kms_alias" "eks" {
@@ -13,6 +29,9 @@ resource "aws_kms_alias" "eks" {
 }
 
 data "aws_iam_policy_document" "logs_kms" {
+  #checkov:skip=CKV_AWS_109:Key policy - Resource "*" means this key only; admin statement is scoped to this account root
+  #checkov:skip=CKV_AWS_111:Key policy - Resource "*" means this key only
+  #checkov:skip=CKV_AWS_356:Key policy - Resource "*" means this key only
   statement {
     sid       = "AccountAdmin"
     actions   = ["kms:*"]

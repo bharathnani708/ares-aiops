@@ -29,6 +29,7 @@ resource "aws_iam_role_policy_attachment" "cluster" {
 }
 
 resource "aws_cloudwatch_log_group" "cluster" {
+  #checkov:skip=CKV_AWS_338:Demo environment keeps var.log_retention_days (14) to control cost; raise to 365 for production
   # EKS writes control-plane logs here; pre-creating sets retention + KMS.
   name              = "/aws/eks/${local.name}/cluster"
   retention_in_days = var.log_retention_days
@@ -36,12 +37,14 @@ resource "aws_cloudwatch_log_group" "cluster" {
 }
 
 resource "aws_eks_cluster" "this" {
+  #checkov:skip=CKV_AWS_38:CIDRs come from a variable whose validation rejects 0.0.0.0/0
+  #checkov:skip=CKV_AWS_39:Public endpoint is required for laptop kubectl; restricted to var.cluster_endpoint_public_cidrs (validated, never 0.0.0.0/0)
   name     = local.name
   version  = var.kubernetes_version
   role_arn = aws_iam_role.cluster.arn
 
   bootstrap_self_managed_addons = false
-  enabled_cluster_log_types     = ["api", "audit", "authenticator"]
+  enabled_cluster_log_types     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   access_config {
     authentication_mode                         = "API"

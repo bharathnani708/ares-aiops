@@ -1,6 +1,7 @@
 # Application logs: Fluent Bit (namespace logging) ships container logs from
 # the "ares" namespace into this log group. The analyst Lambda queries it.
 resource "aws_cloudwatch_log_group" "workloads" {
+  #checkov:skip=CKV_AWS_338:Demo environment keeps var.log_retention_days (14) to control cost
   name              = "/aws/eks/${local.name}/workloads"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.data.arn

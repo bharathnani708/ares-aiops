@@ -95,6 +95,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 # VPC flow logs (rejected traffic only keeps it cheap but useful for security reviews)
 resource "aws_cloudwatch_log_group" "flow_logs" {
+  #checkov:skip=CKV_AWS_338:Demo environment keeps var.log_retention_days (14) to control cost
   name              = "/aws/vpc/${local.name}/flow-logs"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.data.arn
