@@ -19,11 +19,16 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import anthropic
 import boto3
-from anthropic import AnthropicBedrockMantle
+from anthropic import AnthropicBedrock, AnthropicBedrockMantle
 
 LOG_GROUP = os.environ["APP_LOG_GROUP"]
-MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-opus-5-5")
+# Comma-separated, tried in order until one is available to this account, e.g.
+#   "anthropic.claude-opus-5-5,anthropic.claude-sonnet-5-5,mantle:anthropic.claude-haiku-5-5"
+# A "runtime:" prefix calls the classic bedrock-runtime InvokeModel endpoint
+# instead of the Messages-API ("mantle") endpoint, which is the default.
+MODEL_IDS = [m.strip() for m in os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-opus-5-5").split(",") if m.strip()]
 EFFORT = os.getenv("ANALYST_EFFORT", "medium")
 WINDOW_MINUTES = int(os.getenv("WINDOW_MINUTES", "15"))
 REGION = os.getenv("AWS_REGION", "us-east-1")
@@ -33,6 +38,8 @@ log.setLevel(logging.INFO)
 
 logs = boto3.client("logs", region_name=REGION)
 claude = AnthropicBedrockMantle(aws_region=REGION)
+claude_runtime = AnthropicBedrock(aws_region=REGION)
+_working: tuple[str, str] | None = None  # (endpoint, model) that succeeded last; reused while warm
 
 # Logs Insights queries over the Fluent Bit stream. habitat-api writes JSON
 # lines; Fluent Bit's kubernetes filter merges them into top-level fields.
@@ -125,22 +132,70 @@ def analyse(question: str, history: list[dict], snapshot: dict, cw: dict) -> dic
         "role": "user",
         "content": f"<telemetry>\n{telemetry}\n</telemetry>\n\nOperator question: {question}",
     })
-    response = claude.messages.create(
-        model=MODEL_ID,
-        max_tokens=8000,
-        system=SYSTEM_PROMPT,
-        messages=messages,
-        output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": ANALYSIS_SCHEMA}},
-    )
+    response, endpoint, model = call_claude(messages)
     usage = {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}
-    log.info(json.dumps({"event": "analysis", "model": MODEL_ID, "stop_reason": response.stop_reason, **usage}))
+    log.info(json.dumps({"event": "analysis", "endpoint": endpoint, "model": model,
+                         "stop_reason": response.stop_reason, **usage}))
     if response.stop_reason == "refusal":
         return {"status": "unknown", "answer": "The model declined to analyse this request.",
                 "root_cause": "", "next_steps": [], "evidence": [], "meta": usage}
     text = next((b.text for b in response.content if b.type == "text"), "{}")
-    result = json.loads(text)
-    result["meta"] = {**usage, "model": MODEL_ID, "stop_reason": response.stop_reason}
+    result = _parse_json(text)
+    result["meta"] = {**usage, "model": model, "endpoint": endpoint, "stop_reason": response.stop_reason}
     return result
+
+
+def _candidates() -> list[tuple[str, str]]:
+    out = []
+    for entry in MODEL_IDS:
+        endpoint, _, model = entry.partition(":") if entry.startswith(("mantle:", "runtime:")) else ("mantle", "", entry)
+        out.append((endpoint, model))
+    if _working in out:
+        out.remove(_working)
+        out.insert(0, _working)
+    return out
+
+
+def call_claude(messages: list[dict]):
+    """Try each configured (endpoint, model) until one is enabled for this account."""
+    global _working
+    errors = []
+    for endpoint, model in _candidates():
+        client = claude if endpoint == "mantle" else claude_runtime
+        kwargs = dict(model=model, max_tokens=8000, system=SYSTEM_PROMPT, messages=messages)
+        try:
+            try:
+                response = client.messages.create(
+                    **kwargs,
+                    output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": ANALYSIS_SCHEMA}})
+            except anthropic.BadRequestError as exc:
+                # Older models/endpoints may not accept output_config: ask for JSON in the prompt instead.
+                log.warning("%s %s rejected output_config (%s); retrying with prompt-only JSON", endpoint, model, exc)
+                response = client.messages.create(**{**kwargs, "system": SYSTEM_PROMPT + JSON_ONLY_SUFFIX})
+            _working = (endpoint, model)
+            return response, endpoint, model
+        except (anthropic.NotFoundError, anthropic.PermissionDeniedError) as exc:
+            log.warning("model unavailable: %s %s: %s", endpoint, model, exc)
+            errors.append(f"{endpoint}:{model} -> {exc.status_code}")
+    raise RuntimeError("No configured Claude model is available to this account: " + "; ".join(errors)
+                       + ". Run scripts/probe-bedrock.py to find one and set BEDROCK_MODEL_ID.")
+
+
+JSON_ONLY_SUFFIX = (
+    "\n\nRespond with only a JSON object (no prose, no code fences) with keys: "
+    'status ("healthy"|"degraded"|"critical"|"unknown"), answer (string), root_cause (string), '
+    "next_steps (array of strings), evidence (array of strings)."
+)
+
+
+def _parse_json(text: str) -> dict:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end > start:
+            return json.loads(text[start:end + 1])
+        return {"status": "unknown", "answer": text, "root_cause": "", "next_steps": [], "evidence": []}
 
 
 def lambda_handler(event, context):

@@ -45,3 +45,38 @@ def test_handler_combines_snapshot_logs_and_model(monkeypatch):
     assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
     assert "slow" in msgs[-1]["content"] and "why slow?" in msgs[-1]["content"]
     assert fake.kwargs["output_config"]["format"]["type"] == "json_schema"
+
+
+def test_falls_back_to_next_model(monkeypatch):
+    import anthropic
+
+    calls = []
+
+    class Missing(FakeMessages):
+        def create(self, **kwargs):
+            calls.append(kwargs["model"])
+            if kwargs["model"] == "anthropic.claude-missing":
+                resp = types.SimpleNamespace(status_code=404, headers={}, request=None)
+                raise anthropic.NotFoundError("not found", response=resp, body=None)
+            return super().create(**kwargs)
+
+    fake = Missing()
+    monkeypatch.setattr(handler, "claude", types.SimpleNamespace(messages=fake))
+    monkeypatch.setattr(handler, "MODEL_IDS", ["anthropic.claude-missing", "anthropic.claude-ok"])
+    monkeypatch.setattr(handler, "_working", None)
+    monkeypatch.setattr(handler, "cloudwatch_context", lambda: {})
+    out = handler.lambda_handler({"question": "status?"}, None)
+    assert calls == ["anthropic.claude-missing", "anthropic.claude-ok"]
+    assert out["meta"]["model"] == "anthropic.claude-ok"
+    assert handler._working == ("mantle", "anthropic.claude-ok")
+
+
+def test_runtime_prefix_routes_to_runtime_client(monkeypatch):
+    fake = FakeMessages()
+    monkeypatch.setattr(handler, "claude_runtime", types.SimpleNamespace(messages=fake))
+    monkeypatch.setattr(handler, "MODEL_IDS", ["runtime:us.anthropic.claude-sonnet-4-6"])
+    monkeypatch.setattr(handler, "_working", None)
+    monkeypatch.setattr(handler, "cloudwatch_context", lambda: {})
+    out = handler.lambda_handler({"question": "status?"}, None)
+    assert fake.kwargs["model"] == "us.anthropic.claude-sonnet-4-6"
+    assert out["meta"]["endpoint"] == "runtime"
