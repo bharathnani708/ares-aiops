@@ -1,0 +1,22 @@
+# Guard rails: Argo CD may only deploy from your repo and the two Helm repos,
+# and only into the namespaces this project uses.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ares
+  namespace: argocd
+spec:
+  description: ARES AIOps platform
+  sourceRepos:
+    - __GIT_REPO_URL__
+    - https://prometheus-community.github.io/helm-charts
+    - https://aws.github.io/eks-charts
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: ares }
+    - { server: https://kubernetes.default.svc, namespace: monitoring }
+    - { server: https://kubernetes.default.svc, namespace: logging }
+    - { server: https://kubernetes.default.svc, namespace: argocd }
+    - { server: https://kubernetes.default.svc, namespace: kube-system }  # kube-prometheus-stack service monitors
+  clusterResourceWhitelist:
+    - { group: "*", kind: "*" }
+  sourceNamespaces: [argocd]

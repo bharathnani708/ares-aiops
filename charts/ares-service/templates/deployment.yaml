@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ares.name" . }}
+  labels: {{- include "ares.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: {{- include "ares.selector" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: {{- include "ares.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "ares.sa" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "ares.selector" . | nindent 14 }}
+      containers:
+        - name: {{ include "ares.name" . }}
+          image: "{{ required "image.repository is required" .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          env:
+            - name: APP_VERSION
+              value: {{ .Values.image.tag | quote }}
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- range $k, $v := .Values.secretEnv }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef: { name: {{ $v.secretName }}, key: {{ $v.key }} }
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: {{ .Values.probes.readiness }}, port: http }
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: {{ .Values.probes.liveness }}, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

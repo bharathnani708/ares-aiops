@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ares.name" . }}
+  labels: {{- include "ares.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "ares.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+---
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ares.sa" . }}
+  labels: {{- include "ares.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}

@@ -1,0 +1,22 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+plan.txt
+crash.log
+terraform.tfvars
+backend.hcl
+infra/terraform/.build/
+# Lambda build output
+lambda/ai-analyst/build/
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

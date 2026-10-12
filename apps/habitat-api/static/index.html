@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARES-1 Habitat</title>
+<style>
+  :root { --bg:#0d0806; --panel:#1a100c; --line:#3a221a; --text:#f4e6dc; --muted:#b39a8b;
+          --mars:#e2643a; --ok:#4fd08a; --warn:#f2b33d; --crit:#ff4d4d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(1200px 600px at 80% -10%, #4a1d10 0%, var(--bg) 60%); color:var(--text); min-height:100vh; }
+  header { padding:28px 24px 8px; max-width:1100px; margin:auto; display:flex; align-items:center; gap:16px; }
+  .planet { width:44px; height:44px; border-radius:50%; background: radial-gradient(circle at 30% 30%, #ff9a6b, #b33a17 60%, #5a1708);
+            box-shadow: 0 0 30px #e2643a88; }
+  h1 { font-size:22px; margin:0; letter-spacing:.06em; }
+  .sub { color:var(--muted); font-size:13px; }
+  main { max-width:1100px; margin:auto; padding:16px 24px 48px; }
+  .status { display:inline-block; padding:6px 12px; border-radius:999px; font-weight:700; font-size:13px; letter-spacing:.08em; }
+  .NOMINAL { background:#123a26; color:var(--ok); } .WARNING { background:#3d2c0c; color:var(--warn); }
+  .CRITICAL { background:#4a1212; color:var(--crit); animation: pulse 1s infinite; } .OFFLINE { background:#2a2a2a; color:#aaa; }
+  @keyframes pulse { 50% { opacity:.55; } }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-top:18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.1em; }
+  .value { font-size:34px; font-weight:700; margin-top:6px; font-variant-numeric: tabular-nums; }
+  .bar { height:6px; background:#2b1a14; border-radius:6px; margin-top:12px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--mars); transition: width .6s; }
+  .faults { margin-top:18px; color:var(--warn); font-size:14px; min-height:20px; }
+  footer { color:var(--muted); font-size:12px; margin-top:24px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="planet" aria-hidden="true"></div>
+  <div>
+    <h1>ARES-1 HABITAT &middot; JEZERO CRATER</h1>
+    <div class="sub">Life-support telemetry &middot; <span id="sol">Sol —</span> &middot; build <span id="ver">—</span></div>
+  </div>
+</header>
+<main>
+  <span id="status" class="status OFFLINE">CONNECTING</span>
+  <div class="grid">
+    <div class="card"><div class="label">Cabin O₂</div><div class="value" id="o2">—</div><div class="bar"><i id="o2bar" style="width:0"></i></div></div>
+    <div class="card"><div class="label">Solar output</div><div class="value" id="power">—</div><div class="bar"><i id="pbar" style="width:0"></i></div></div>
+    <div class="card"><div class="label">Water reserve</div><div class="value" id="water">—</div><div class="bar"><i id="wbar" style="width:0"></i></div></div>
+    <div class="card"><div class="label">Crew</div><div class="value" id="crew">—</div><div class="sub" id="latency">uplink —</div></div>
+  </div>
+  <div class="faults" id="faults"></div>
+  <footer>Telemetry refreshes every 2 seconds. Watched by Prometheus, shipped to CloudWatch by Fluent Bit, and explained by the ARES Ops Copilot.</footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+async function tick() {
+  const t0 = performance.now();
+  try {
+    const r = await fetch('/api/telemetry', { cache: 'no-store' });
+    const ms = Math.round(performance.now() - t0);
+    if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    const d = await r.json();
+    $('status').textContent = d.status; $('status').className = 'status ' + d.status;
+    $('o2').textContent = d.oxygen_percent.toFixed(2) + '%';
+    $('o2bar').style.width = Math.min(100, (d.oxygen_percent / 21) * 100) + '%';
+    $('power').textContent = d.power_kw.toFixed(1) + ' kW';
+    $('pbar').style.width = Math.min(100, (d.power_kw / 45) * 100) + '%';
+    $('water').textContent = Math.round(d.water_liters) + ' L';
+    $('wbar').style.width = Math.min(100, (d.water_liters / 2000) * 100) + '%';
+    $('crew').textContent = d.crew;
+    $('sol').textContent = 'Sol ' + d.sol; $('ver').textContent = d.version;
+    $('latency').textContent = 'uplink ' + ms + ' ms';
+    $('faults').textContent = d.active_faults.length ? '⚠ Active faults: ' + d.active_faults.join(', ') : '';
+  } catch (e) {
+    $('status').textContent = 'SIGNAL LOST'; $('status').className = 'status CRITICAL';
+    $('faults').textContent = '⚠ ' + e.message;
+  }
+}
+tick(); setInterval(tick, 2000);
+</script>
+</body>
+</html>

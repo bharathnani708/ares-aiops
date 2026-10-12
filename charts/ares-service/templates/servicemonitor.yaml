@@ -1,0 +1,17 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "ares.name" . }}
+  labels: {{- include "ares.labels" . | nindent 4 }}
+  annotations:
+    # The CRD arrives with kube-prometheus-stack; let Argo CD retry until it exists.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels: {{- include "ares.selector" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.serviceMonitor.path }}
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

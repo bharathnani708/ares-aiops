@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: ares
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "77.*"   # pin an exact version once you've tested one
+      helm:
+        releaseName: kube-prometheus-stack
+        valueFiles: [$values/gitops/values/kube-prometheus-stack.yaml]
+    - repoURL: __GIT_REPO_URL__
+      targetRevision: main
+      ref: values
+  destination: { server: https://kubernetes.default.svc, namespace: monitoring }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]

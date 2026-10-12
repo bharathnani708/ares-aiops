@@ -1,0 +1,27 @@
+# Laptop mode: no AWS needed except for the AI answers.
+#   docker compose -f local/docker-compose.yml up --build
+#   habitat     http://localhost:8081
+#   console     http://localhost:8080   (chaos buttons + live signals work locally;
+#                                        chat needs the deployed Lambda + AWS creds)
+#   prometheus  http://localhost:9090
+services:
+  habitat-api:
+    build: ../apps/habitat-api
+    environment: { CHAOS_TOKEN: local-dev-token }
+    ports: ["8081:8080"]
+    mem_limit: 256m
+  mission-control:
+    build: ../apps/mission-control
+    environment:
+      CHAOS_TOKEN: local-dev-token
+      HABITAT_URL: http://habitat-api:8080
+      PROMETHEUS_URL: http://prometheus:9090
+      AWS_REGION: us-east-1
+      # Uncomment to use your AWS profile for the chat (after terraform apply):
+      # AWS_PROFILE: default
+    # volumes: ["~/.aws:/home/app/.aws:ro"]
+    ports: ["8080:8080"]
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]

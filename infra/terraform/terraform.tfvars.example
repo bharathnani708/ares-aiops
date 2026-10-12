@@ -1,0 +1,6 @@
+region                        = "us-east-1"
+admin_principal_arn           = "arn:aws:iam::123456789012:user/your-user"   # aws sts get-caller-identity
+cluster_endpoint_public_cidrs = ["203.0.113.10/32"]                          # curl -s https://checkip.amazonaws.com
+node_capacity_type            = "SPOT"
+# kubernetes_version          = "1.35"
+# bedrock_model_id            = "anthropic.claude-opus-5-5"

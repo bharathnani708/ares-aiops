@@ -1,0 +1,48 @@
+# Defaults; per-service overrides live in gitops/values/<service>.yaml
+
+nameOverride: ""
+replicaCount: 2
+
+image:
+  repository: ""            # <account>.dkr.ecr.<region>.amazonaws.com/ares-aiops/<service>
+  tag: ""                   # written by CI (git SHA); immutable in ECR
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+serviceAccount:
+  create: true
+  name: ""
+  automountToken: false     # only mission-control needs the Kubernetes API
+
+env: {}
+secretEnv: {}               # NAME: {secretName: x, key: y}
+
+resources:
+  requests: { cpu: 50m, memory: 96Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+
+probes:
+  liveness: /healthz
+  readiness: /readyz
+
+service:
+  port: 80
+
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  interval: 15s
+
+# Ingress allow-list; everything else in the namespace is denied by default.
+networkPolicy:
+  enabled: true
+  allowFrom: []             # list of NetworkPolicyPeer objects
+
+# Namespaced read-only roles, e.g. pods/events here and Argo CD applications.
+rbac:
+  roles: []                 # - {namespace: x, rules: [...]}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

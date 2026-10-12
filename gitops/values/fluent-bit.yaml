@@ -1,0 +1,33 @@
+# aws-for-fluent-bit (https://github.com/aws/eks-charts/tree/master/stable/aws-for-fluent-bit)
+# Ships only the "ares" namespace's container logs to CloudWatch Logs.
+# Credentials: EKS Pod Identity binds service account logging/fluent-bit to an
+# IAM role that may only write to this one log group.
+
+serviceAccount:
+  create: true
+  name: fluent-bit
+
+input:
+  path: "/var/log/containers/*_ares_*.log"
+
+filter:
+  mergeLog: "On"          # lift the app's JSON fields (level, trace_id, duration_ms...) to top level
+  keepLog: "Off"
+  k8sLoggingParser: "On"
+  k8sLoggingExclude: "On"
+
+cloudWatchLogs:
+  enabled: true
+  region: __AWS_REGION__
+  logGroupName: /aws/eks/ares-aiops/workloads
+  logStreamPrefix: "ares-"
+  autoCreateGroup: false  # Terraform owns the group (retention + KMS)
+
+cloudWatch: { enabled: false }
+firehose: { enabled: false }
+kinesis: { enabled: false }
+elasticsearch: { enabled: false }
+
+resources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { memory: 192Mi }

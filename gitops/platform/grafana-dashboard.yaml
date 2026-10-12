@@ -1,0 +1,448 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ares
+  namespace: ares
+  labels:
+    grafana_dashboard: "1"   # picked up by the Grafana sidecar in kube-prometheus-stack
+data:
+  ares-habitat.json: |
+    {
+      "uid": "ares-habitat",
+      "title": "ARES Habitat — Mission Overview",
+      "tags": [
+        "ares",
+        "aiops"
+      ],
+      "timezone": "utc",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Cabin O₂",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 18
+                  },
+                  {
+                    "color": "green",
+                    "value": 19.5
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "avg(habitat_oxygen_percent)"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Error ratio",
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.01
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.05
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(habitat_http_requests_total{path=\"/api/telemetry\",status=~\"5..\"}[2m])) / clamp_min(sum(rate(habitat_http_requests_total{path=\"/api/telemetry\"}[2m])),1e-9)"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "p95 latency",
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.5
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum(rate(habitat_http_request_duration_seconds_bucket{path=\"/api/telemetry\"}[2m])) by (le))"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Restarts (15m)",
+          "gridPos": {
+            "x": 18,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"ares\"}[15m]))"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Requests by status",
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(habitat_http_requests_total{path=\"/api/telemetry\"}[1m])) by (status)",
+              "legendFormat": "{{status}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Latency p50 / p95",
+          "gridPos": {
+            "x": 12,
+            "y": 5,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum(rate(habitat_http_request_duration_seconds_bucket{path=\"/api/telemetry\"}[2m])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "refId": "B",
+              "expr": "histogram_quantile(0.50, sum(rate(habitat_http_request_duration_seconds_bucket{path=\"/api/telemetry\"}[2m])) by (le))",
+              "legendFormat": "p50"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Subsystem span latency (p95)",
+          "gridPos": {
+            "x": 0,
+            "y": 13,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum(rate(habitat_subsystem_span_seconds_bucket[2m])) by (le, subsystem))",
+              "legendFormat": "{{subsystem}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Life support",
+          "gridPos": {
+            "x": 12,
+            "y": 13,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "avg(habitat_oxygen_percent)",
+              "legendFormat": "O2 %"
+            },
+            {
+              "refId": "B",
+              "expr": "avg(habitat_power_kw)",
+              "legendFormat": "Solar kW"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Memory working set by pod",
+          "gridPos": {
+            "x": 0,
+            "y": 21,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"ares\",container!=\"\"}) by (pod)",
+              "legendFormat": "{{pod}}"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "CPU by pod",
+          "gridPos": {
+            "x": 12,
+            "y": 21,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"ares\",container!=\"\"}[2m])) by (pod)",
+              "legendFormat": "{{pod}}"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Active chaos scenarios",
+          "gridPos": {
+            "x": 0,
+            "y": 29,
+            "w": 24,
+            "h": 6
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(habitat_chaos_active) by (scenario)",
+              "legendFormat": "{{scenario}}"
+            }
+          ]
+        }
+      ]
+    }

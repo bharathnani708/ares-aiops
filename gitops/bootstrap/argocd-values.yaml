@@ -1,0 +1,22 @@
+# Argo CD itself (installed once by scripts/bootstrap-argocd.sh with Helm).
+dex:
+  enabled: false
+notifications:
+  enabled: false
+configs:
+  params:
+    server.insecure: false
+  cm:
+    # Show health for Argo CD Applications in the app-of-apps view.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then hs.message = obj.status.health.message end
+      end
+      return hs
+server:
+  service:
+    type: ClusterIP       # reach it with kubectl port-forward; nothing public

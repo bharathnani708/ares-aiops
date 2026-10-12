@@ -1,0 +1,46 @@
+# mission-control: chat UI + chaos console. Reach it with:
+#   kubectl -n ares port-forward svc/mission-control 8080:80
+image:
+  repository: __AWS_ACCOUNT_ID__.dkr.ecr.__AWS_REGION__.amazonaws.com/ares-aiops/mission-control
+  tag: "initial"
+
+replicaCount: 1
+
+probes:
+  liveness: /healthz
+  readiness: /healthz
+
+serviceAccount:
+  name: mission-control      # bound to an IAM role through EKS Pod Identity
+  automountToken: true       # reads pods/events and Argo CD apps (read-only roles below)
+
+env:
+  AWS_REGION: __AWS_REGION__
+  APP_NAMESPACE: ares
+  ARGOCD_NAMESPACE: argocd
+  HABITAT_URL: http://habitat-api.ares.svc.cluster.local
+  PROMETHEUS_URL: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+  ANALYST_FUNCTION_NAME: ares-aiops-ai-analyst
+
+secretEnv:
+  CHAOS_TOKEN: { secretName: ares-chaos-token, key: token }
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { cpu: 500m, memory: 384Mi }
+
+networkPolicy:
+  allowFrom: []   # port-forward only; add an ingress controller peer if you expose it
+
+rbac:
+  roles:
+    - namespace: ares
+      rules:
+        - apiGroups: [""]
+          resources: [pods, events]
+          verbs: [get, list]
+    - namespace: argocd
+      rules:
+        - apiGroups: [argoproj.io]
+          resources: [applications]
+          verbs: [get, list]

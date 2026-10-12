@@ -1,0 +1,112 @@
+name: infra
+
+on:
+  pull_request:
+    paths: ["infra/terraform/**", "lambda/**", ".github/workflows/infra.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/terraform/**", "lambda/**", ".github/workflows/infra.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write          # GitHub OIDC -> short-lived AWS credentials
+  pull-requests: write     # post the plan on the PR
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_admin_principal_arn: ${{ vars.ADMIN_PRINCIPAL_ARN }}
+  TF_VAR_cluster_endpoint_public_cidrs: ${{ vars.CLUSTER_ENDPOINT_PUBLIC_CIDRS }}   # JSON list, e.g. ["203.0.113.10/32"]
+  TF_VAR_node_capacity_type: ${{ vars.NODE_CAPACITY_TYPE || 'SPOT' }}
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+jobs:
+  lambda-test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: lambda/ai-analyst } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements.txt pytest && pytest -q
+
+  plan:
+    needs: lambda-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.16.5", terraform_wrapper: false }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Package Lambda
+        working-directory: .
+        run: ./scripts/package-lambda.sh
+      - name: Write backend config
+        run: |
+          cat > backend.hcl <<HCL
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "ares-aiops/terraform.tfstate"
+          region       = "${AWS_REGION}"
+          encrypt      = true
+          use_lockfile = true
+          HCL
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false -backend-config=backend.hcl
+      - run: terraform validate
+      - name: Security scan (Checkov)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+          soft_fail: true            # report only; review the findings in the job log
+      - name: Plan
+        run: terraform plan -input=false -lock=false -no-color -out=tfplan | tee plan.txt
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/terraform/plan.txt', 'utf8');
+            const body = '### Terraform plan\n```\n' + plan.slice(-60000) + '\n```';
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+
+  apply:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: aws-prod      # add required reviewers to this environment in GitHub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.16.5", terraform_wrapper: false }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Package Lambda
+        working-directory: .
+        run: ./scripts/package-lambda.sh
+      - name: Write backend config
+        run: |
+          cat > backend.hcl <<HCL
+          bucket       = "${{ vars.TF_STATE_BUCKET }}"
+          key          = "ares-aiops/terraform.tfstate"
+          region       = "${AWS_REGION}"
+          encrypt      = true
+          use_lockfile = true
+          HCL
+      - run: terraform init -input=false -backend-config=backend.hcl
+      - run: terraform apply -input=false -auto-approve
+      - run: terraform output

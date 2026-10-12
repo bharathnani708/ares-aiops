@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: habitat-api
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: ares
+  source:
+    repoURL: __GIT_REPO_URL__
+    targetRevision: main
+    path: charts/ares-service
+    helm:
+      releaseName: habitat-api
+      valueFiles: [../../gitops/values/habitat-api.yaml]
+  destination: { server: https://kubernetes.default.svc, namespace: ares }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }   # drift is reverted automatically
+    retry: { limit: 10, backoff: { duration: 15s, factor: 2, maxDuration: 3m } }

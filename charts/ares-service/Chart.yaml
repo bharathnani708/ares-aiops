@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ares-service
+description: Generic, hardened chart for the ARES services (habitat-api, mission-control)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

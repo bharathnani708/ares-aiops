@@ -1,0 +1,36 @@
+# Prometheus + Alertmanager + Grafana + kube-state-metrics + node-exporter.
+# Storage is ephemeral to keep the demo simple and cheap.
+
+# EKS manages these control-plane components; they cannot be scraped.
+kubeEtcd: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }
+
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    # Pick up ServiceMonitors / PrometheusRules from every namespace, not just this release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1536Mi }
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+
+grafana:
+  admin:
+    existingSecret: grafana-admin        # created by scripts/bootstrap-argocd.sh
+    userKey: admin-user
+    passwordKey: admin-password
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  defaultDashboardsTimezone: utc

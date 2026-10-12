@@ -1,0 +1,18 @@
+# App of apps: everything under gitops/apps is reconciled from Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: ares
+  source:
+    repoURL: __GIT_REPO_URL__
+    targetRevision: main
+    path: gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

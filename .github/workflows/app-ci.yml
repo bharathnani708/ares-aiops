@@ -1,0 +1,89 @@
+name: app-ci
+
+# Build -> test -> scan -> push to ECR -> bump the image tag in gitops/values.
+# Argo CD notices the commit and rolls the new version out. CI never talks to
+# the cluster (pull-based GitOps), so it needs no Kubernetes credentials.
+
+on:
+  pull_request:
+    paths: ["apps/**", ".github/workflows/app-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/**", ".github/workflows/app-ci.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [habitat-api, mission-control]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Unit tests
+        working-directory: apps/${{ matrix.service }}
+        run: pip install -r requirements-dev.txt && pytest -q
+
+      - name: Build image
+        run: |
+          docker build --build-arg APP_VERSION=${GITHUB_SHA::7} \
+            -t local/${{ matrix.service }}:${GITHUB_SHA::7} apps/${{ matrix.service }}
+
+      - name: Scan image (Trivy) - fail on fixable critical CVEs
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image \
+            --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress local/${{ matrix.service }}:${GITHUB_SHA::7}
+
+      - name: Configure AWS credentials (OIDC)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ECR_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Push to ECR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        id: push
+        run: |
+          REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+          IMAGE=$REGISTRY/ares-aiops/${{ matrix.service }}:${GITHUB_SHA::7}
+          docker tag local/${{ matrix.service }}:${GITHUB_SHA::7} "$IMAGE"
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+  bump-gitops:
+    # One commit for both services so the two matrix jobs never race on git push.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update image tags in gitops/values
+        run: |
+          TAG=${GITHUB_SHA::7}
+          for svc in habitat-api mission-control; do
+            sed -i -E "s/^(  tag: ).*/\1\"${TAG}\"   # set by app-ci/" gitops/values/${svc}.yaml
+          done
+          git config user.name "ares-ci[bot]"
+          git config user.email "ares-ci[bot]@users.noreply.github.com"
+          git add gitops/values
+          git diff --cached --quiet && exit 0
+          git commit -m "deploy: habitat-api, mission-control -> ${TAG} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: habitat-alerts
+  namespace: ares
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: habitat.slo
+      rules:
+        - alert: HabitatHighErrorRate
+          expr: |
+            sum(rate(habitat_http_requests_total{path="/api/telemetry",status=~"5.."}[2m]))
+              / clamp_min(sum(rate(habitat_http_requests_total{path="/api/telemetry"}[2m])), 1e-9) > 0.05
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "habitat-api 5xx ratio above 5%"
+        - alert: HabitatHighLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(habitat_http_request_duration_seconds_bucket{path="/api/telemetry"}[2m])) by (le)) > 1
+          for: 2m
+          labels: { severity: warning }
+          annotations:
+            summary: "habitat-api p95 latency above 1s"
+    - name: habitat.life-support
+      rules:
+        - alert: HabitatOxygenLow
+          expr: avg(habitat_oxygen_percent) < 19.5
+          for: 1m
+          labels: { severity: warning }
+          annotations: { summary: "Cabin O2 below 19.5%" }
+        - alert: HabitatOxygenCritical
+          expr: avg(habitat_oxygen_percent) < 18
+          for: 30s
+          labels: { severity: critical }
+          annotations: { summary: "Cabin O2 below 18% - crew at risk" }
+    - name: habitat.kubernetes
+      rules:
+        - alert: HabitatPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="ares"}[10m]) > 0
+          labels: { severity: warning }
+          annotations: { summary: "{{ $labels.pod }} restarted in the last 10 minutes" }
+        - alert: HabitatOOMKilled
+          expr: kube_pod_container_status_last_terminated_reason{namespace="ares",reason="OOMKilled"} == 1
+          labels: { severity: critical }
+          annotations: { summary: "{{ $labels.pod }} was OOMKilled" }
+        - alert: HabitatCPUThrottling
+          expr: |
+            sum(rate(container_cpu_cfs_throttled_periods_total{namespace="ares"}[5m])) by (pod)
+              / clamp_min(sum(rate(container_cpu_cfs_periods_total{namespace="ares"}[5m])) by (pod), 1e-9) > 0.5
+          for: 3m
+          labels: { severity: warning }
+          annotations: { summary: "{{ $labels.pod }} is CPU throttled over 50% of the time" }
