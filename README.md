@@ -223,6 +223,7 @@ Also allow the CI bot to push the image-tag commits: **Settings → Actions → 
 
 ```bash
 ./scripts/configure.sh "$(aws sts get-caller-identity --query Account --output text)" us-east-1 https://github.com/<you>/ares-aiops.git
+./scripts/configure.sh "$(aws sts get-caller-identity --query Account --output text)" us-east-1 https://github.com/bharathnani708/ares-aiops
 git add gitops && git commit -m "Configure account, region and repo" && git push
 ```
 
@@ -230,6 +231,7 @@ Trigger the infrastructure workflow (or push any change under `infra/terraform/`
 
 ```bash
 gh workflow run infra.yml -R <you>/ares-aiops
+gh workflow run infra.yml -R bharathnani708/ares-aiops
 gh run watch -R <you>/ares-aiops
 ```
 
@@ -250,6 +252,7 @@ terraform -chdir=infra/terraform apply
 
 ```bash
 gh workflow run app-ci.yml -R <you>/ares-aiops
+gh workflow run app-ci.yml -R bharathnani708/ares-aiops
 gh run watch -R <you>/ares-aiops
 git pull                      # fetch the "deploy: ... -> <sha>" commit CI made in gitops/values
 ```

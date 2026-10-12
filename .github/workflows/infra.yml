@@ -23,6 +23,7 @@ env:
   TF_VAR_admin_principal_arn: ${{ vars.ADMIN_PRINCIPAL_ARN }}
   TF_VAR_cluster_endpoint_public_cidrs: ${{ vars.CLUSTER_ENDPOINT_PUBLIC_CIDRS }}   # JSON list, e.g. ["203.0.113.10/32"]
   TF_VAR_node_capacity_type: ${{ vars.NODE_CAPACITY_TYPE || 'SPOT' }}
+  TF_VAR_bedrock_model_id: ${{ vars.BEDROCK_MODEL_ID || 'anthropic.claude-opus-5-5' }}
 
 defaults:
   run:
