@@ -8,7 +8,7 @@ metadata:
 spec:
   description: ARES AIOps platform
   sourceRepos:
-    - __GIT_REPO_URL__
+    - https://github.com/bharathnani708/ares-aiops
     - https://prometheus-community.github.io/helm-charts
     - https://aws.github.io/eks-charts
   destinations:

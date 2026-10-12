@@ -14,7 +14,7 @@ spec:
       helm:
         releaseName: fluent-bit
         valueFiles: [$values/gitops/values/fluent-bit.yaml]
-    - repoURL: __GIT_REPO_URL__
+    - repoURL: https://github.com/bharathnani708/ares-aiops
       targetRevision: main
       ref: values
   destination: { server: https://kubernetes.default.svc, namespace: logging }

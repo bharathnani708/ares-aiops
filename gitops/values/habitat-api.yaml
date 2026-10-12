@@ -1,6 +1,6 @@
 # habitat-api: the workload under observation.
 image:
-  repository: __AWS_ACCOUNT_ID__.dkr.ecr.__AWS_REGION__.amazonaws.com/ares-aiops/habitat-api
+  repository: 032265100995.dkr.ecr.us-east-1.amazonaws.com/ares-aiops/habitat-api
   tag: "initial"   # CI replaces this with the git SHA of each build
 
 replicaCount: 2

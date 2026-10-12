@@ -8,7 +8,7 @@ metadata:
 spec:
   project: ares
   source:
-    repoURL: __GIT_REPO_URL__
+    repoURL: https://github.com/bharathnani708/ares-aiops
     targetRevision: main
     path: gitops/apps
   destination:
