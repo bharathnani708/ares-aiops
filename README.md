@@ -3,7 +3,6 @@
 An end-to-end AIOps platform on AWS. A simulated Mars habitat (**ARES-1, Jezero Crater**) runs on Amazon EKS, Git is the single source of truth, Argo CD keeps the cluster in sync, Prometheus and Grafana watch it, Fluent Bit ships its logs to CloudWatch, and an **Ops Copilot built on Claude in Amazon Bedrock** tells you what is happening, why, and what to do next. You can break the habitat on purpose (dust storms, comms blackouts, an O₂ leak, memory leaks, a reactor SCRAM) and ask the copilot to explain it.
 
 ![ARES AIOps architecture](docs/architecture-dark.png)
-##
 
 Interactive version of the diagram: [`docs/architecture.html`](docs/architecture.html).
 
