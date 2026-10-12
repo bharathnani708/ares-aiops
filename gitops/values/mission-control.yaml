@@ -2,7 +2,7 @@
 #   kubectl -n ares port-forward svc/mission-control 8080:80
 image:
   repository: 032265100995.dkr.ecr.us-east-1.amazonaws.com/ares-aiops/mission-control
-  tag: "initial"
+  tag: "2aa9ab0"   # set by app-ci
 
 replicaCount: 1
 
